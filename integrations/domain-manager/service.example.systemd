@@ -1,0 +1,16 @@
+[Unit]
+Description=Homarr domain-manager
+After=network-online.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/homarr/domain-manager
+Environment=DOMAIN_MANAGER_CONFIG=/etc/homarr-domain-manager/config.json
+EnvironmentFile=-/etc/homarr-domain-manager/deployment.env
+ExecStart=/usr/bin/python3 /opt/homarr/domain-manager/server.py
+RuntimeDirectory=homarr-domain-manager
+RuntimeDirectoryMode=0750
+UMask=0077
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target

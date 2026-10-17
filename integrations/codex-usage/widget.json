@@ -1,0 +1,26 @@
+{
+  "$schema": "homarr-custom-widget-v2",
+  "name": "Codex usage",
+  "description": "Local signed-in CLI quota snapshot; account authentication stays on the collector host.",
+  "sources": {
+    "default": {
+      "type": "http",
+      "baseUrl": "http://collector.example.net:18088",
+      "networkScope": "private",
+      "auth": "bearer"
+    }
+  },
+  "requests": {
+    "snapshot": {
+      "source": "default",
+      "path": "/usage/status",
+      "method": "GET",
+      "kind": "query",
+      "trigger": "load",
+      "cacheSeconds": 30,
+      "auth": "inherit",
+      "permission": "view"
+    }
+  },
+  "template": "<Stack data-gp=\"usage-codex\" p={2} gap={2} style={{fontFamily:\"inherit\",width:\"100%\",boxSizing:\"border-box\",minWidth:0}}>\n<Group justify=\"space-between\" gap={3} wrap=\"nowrap\"><Tooltip label={data.snapshot?.codex?.capturedAt ? \"Updated \" + data.snapshot?.codex.ageText : \"Waiting for usage\"}><Group gap={4} wrap=\"nowrap\"><TablerIcon name=\"code\" size={13}/><Text title={data.snapshot?.codex?.capturedAt ? \"Updated \" + data.snapshot?.codex.ageText : \"Waiting for usage\"} size=\"xs\" fw={700} lh={1.1}>Codex usage</Text></Group></Tooltip><Group gap={3} wrap=\"nowrap\">{data.snapshot?.codex?.stale ? <Badge size=\"xs\" variant=\"light\" color=\"yellow\">Stale</Badge> : null}<RefreshButton requestId=\"snapshot\" size=\"xs\"/></Group></Group>\n{status.snapshot?.ok === false ? <Text size=\"xs\" c=\"red\">Feed unavailable</Text> : !data.snapshot ? <Text size=\"xs\" c=\"dimmed\">Loading\u2026</Text> : (data.snapshot?.codex?.windows ?? []).length === 0 ? <Text size=\"xs\" c=\"dimmed\">Waiting for limits</Text> : <Stack gap={3}>{(data.snapshot?.codex?.windows ?? []).map(w => <Tooltip key={w.label} label={w.usedPercent.toFixed(0) + \"% used \u00b7 resets \" + w.resetAtUtc}><Stack gap={2}><Group justify=\"space-between\" gap={3} wrap=\"nowrap\"><Text size=\"xs\" lh={1.1}>{w.label}</Text><Text title={w.usedPercent.toFixed(0) + \"% used \u00b7 resets \" + w.resetAtUtc} size=\"xs\" lh={1.1} c={w.usedPercent >= 90 ? \"red\" : w.usedPercent >= 75 ? \"yellow\" : \"teal\"}>{w.usedPercent.toFixed(0) + \"% used \u00b7 \" + w.resetText}</Text></Group><Progress value={w.usedPercent} size={3} radius=\"xl\" color={w.usedPercent >= 90 ? \"red\" : w.usedPercent >= 75 ? \"yellow\" : \"teal\"} aria-label={w.label + \" percent used; time to reset\"}/></Stack></Tooltip>)}</Stack>}\n</Stack>"
+}

@@ -1,0 +1,9 @@
+{
+  "type": "customWidget",
+  "title": "Codex usage",
+  "description": "Local signed-in CLI quota snapshot; account authentication stays on the collector host. Requires the included local Python collector on a Mac already signed into Codex; uses a private server-side source credential. Setup: see this package's INSTALL.md in the public source release. Add an approved public source URL before submitting. Configure actual service URLs and credentials locally after import; never upload them to Workshop.",
+  "changelog": "Initial public release; portable example URLs and documented local setup.",
+  "contentFile": "widget.json",
+  "widgetSchema": "homarr-custom-widget-v2",
+  "screenshots": []
+}

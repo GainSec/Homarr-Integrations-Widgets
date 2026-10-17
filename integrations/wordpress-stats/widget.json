@@ -1,0 +1,26 @@
+{
+  "$schema": "homarr-custom-widget-v2",
+  "name": "WordPress stats",
+  "description": "Site-scoped daily views, visitors and seven-day chart.",
+  "sources": {
+    "default": {
+      "type": "http",
+      "baseUrl": "https://dashboard.example.net",
+      "networkScope": "private",
+      "auth": "bearer"
+    }
+  },
+  "requests": {
+    "stats": {
+      "source": "default",
+      "path": "/wordpress/api/stats",
+      "method": "GET",
+      "kind": "query",
+      "trigger": "load",
+      "cacheSeconds": 30,
+      "auth": "inherit",
+      "permission": "view"
+    }
+  },
+  "template": "<Stack data-gp=\"wordpress-stats\" p={6} gap={5} style={{fontFamily:\"inherit\",width:\"100%\",boxSizing:\"border-box\",minWidth:0}}>\n<Group justify=\"space-between\" gap={4} wrap=\"nowrap\"><Anchor href=\"https://wordpress.com/stats/day/blog.example.net\" target=\"_blank\" rel=\"noopener noreferrer\" c=\"inherit\" style={{textDecoration:\"none\"}}><Group gap={5} wrap=\"nowrap\"><TablerIcon name=\"chart-line\" size={15}/><Text size=\"xs\" fw={700}>WordPress stats</Text></Group></Anchor><RefreshButton requestId=\"stats\" size=\"xs\"/></Group>\n{status.stats?.ok === false ? <Text size=\"xs\" c=\"red\">Stats feed unavailable</Text> : !data.stats ? <Text size=\"xs\" c=\"dimmed\">Loading stats\u2026</Text> : data.stats.state === \"not_connected\" ? <Text size=\"xs\" c=\"yellow\">WordPress authorization required</Text> : data.stats.state !== \"ready\" ? <Text size=\"xs\" c=\"red\">WordPress stats unavailable</Text> : !data.stats.summary ? <Text size=\"xs\" c=\"dimmed\">No daily statistics available</Text> : <Stack gap={5}>\n<Group justify=\"space-between\" gap={3}><Text size=\"xs\" c=\"dimmed\" lh={1.1}>{\"Latest day \u00b7 \" + data.stats.summary.date.slice(5)}</Text><Text size=\"xs\" c=\"dimmed\" lh={1.1}>blog.example.net</Text></Group>\n<SimpleGrid cols={3} spacing={4}><Stack gap={1}><Text size=\"xs\" c=\"dimmed\" lh={1.1}>Views</Text><Text size=\"sm\" fw={700} lh={1.1} c=\"teal\">{data.stats.summary.views}</Text></Stack><Stack gap={1}><Text size=\"xs\" c=\"dimmed\" lh={1.1}>Visitors</Text><Text size=\"sm\" fw={700} lh={1.1} c=\"teal\">{data.stats.summary.visitors}</Text></Stack><Stack gap={1}><Text size=\"xs\" c=\"dimmed\" lh={1.1}>7-day views</Text><Text size=\"sm\" fw={700} lh={1.1} c=\"teal\">{data.stats.summary.totalViews}</Text></Stack></SimpleGrid>\n<Group h={25} align=\"flex-end\" wrap=\"nowrap\" gap={4}>{(data.stats.days ?? []).map(d => <Box key={d.date} title={d.date + \" \u00b7 \" + d.views + \" views \u00b7 \" + d.visitors + \" visitors\"} aria-label={d.date + \": \" + d.views + \" views, \" + d.visitors + \" visitors\"} style={{flex:1,minWidth:0}}><Box h={Math.max(2,Math.round(d.views / Math.max(1,data.stats.summary.maxViews) * 25))} style={{backgroundColor:\"var(--mantine-color-teal-5)\",borderRadius:\"2px\"}}/></Box>)}</Group>\n<Group justify=\"space-between\" gap={3}><Text size=\"xs\" c=\"dimmed\" lh={1.1}>{data.stats.days[0].date.slice(5)}</Text><Text size=\"xs\" c=\"dimmed\" lh={1.1}>{data.stats.days[data.stats.days.length-1].date.slice(5)}</Text></Group>\n</Stack>}\n</Stack>"
+}

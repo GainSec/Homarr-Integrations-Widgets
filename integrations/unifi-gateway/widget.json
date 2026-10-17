@@ -1,0 +1,68 @@
+{
+  "$schema": "homarr-custom-widget-v2",
+  "name": "UniFi Network Health",
+  "description": "Gateway health, throughput, existing speed-test metrics and eight clients per page with collapsed filtering. No speed test is triggered. Client names, IPs and MACs are intentionally displayed. The separate third-party public-IP lookup is excluded.",
+  "sources": {
+    "default": {
+      "type": "http",
+      "baseUrl": "http://collector.example.net:18086",
+      "networkScope": "private",
+      "auth": "bearer"
+    }
+  },
+  "requests": {
+    "health": {
+      "source": "default",
+      "kind": "query",
+      "method": "GET",
+      "path": "/unifi/health",
+      "trigger": "load",
+      "auth": "inherit",
+      "permission": "view",
+      "cacheSeconds": 15
+    },
+    "clients": {
+      "source": "default",
+      "kind": "query",
+      "method": "GET",
+      "path": "/unifi/clients",
+      "trigger": "load",
+      "auth": "inherit",
+      "permission": "view",
+      "cacheSeconds": 30
+    }
+  },
+  "options": {
+    "site": {
+      "label": "UniFi site",
+      "description": "Site ID from the controller URL; usually 'default'.",
+      "control": "text",
+      "default": "default"
+    },
+    "gatewayName": {
+      "label": "Gateway name",
+      "control": "text",
+      "default": "UniFi Gateway"
+    },
+    "downPlan": {
+      "label": "Plan download (Mbps)",
+      "description": "Scales the live bar and colors speed-test results (green \u2265 90%, yellow \u2265 70%).",
+      "control": "number",
+      "default": 1000,
+      "min": 1
+    },
+    "upPlan": {
+      "label": "Plan upload (Mbps)",
+      "control": "number",
+      "default": 1000,
+      "min": 1
+    },
+    "showAddresses": {
+      "label": "Show client IP and MAC",
+      "description": "Turn off on boards other people can see.",
+      "control": "switch",
+      "default": true
+    }
+  },
+  "template": "<Grid data-gp=\"unifi-health\" p={6} gutter={12} style={{fontFamily:\"inherit\"}}><Grid.Col span={{base:12,md:4}}><Stack gap={6}><Group justify=\"space-between\" gap={4}><Text size=\"sm\" fw={700}>UniFi Gateway</Text><Badge size=\"xs\" variant=\"light\" color={(data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.status === \"ok\" ? \"green\" : \"red\"}>{(data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.status ?? \"unknown\"}</Badge><RefreshButton requestId=\"health\" /></Group><Text size=\"xs\" c=\"dimmed\">{(data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.isp_name ?? \"\"}</Text>{status.health?.ok === false ? <Alert color=\"red\" title=\"UniFi unavailable\">Could not refresh gateway statistics.</Alert> : <SimpleGrid cols={{base:3,sm:3}} spacing={6}><Paper withBorder radius=\"md\" p={6}><Text size=\"xs\" c=\"dimmed\">Live download</Text><Text size=\"sm\" fw={700} c=\"teal\">{(Number((data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.[\"rx_bytes-r\"] ?? 0) * 8 / 1000000).toFixed(1) + \" Mbps\"}</Text></Paper><Paper withBorder radius=\"md\" p={6}><Text size=\"xs\" c=\"dimmed\">Live upload</Text><Text size=\"sm\" fw={700} c=\"cyan\">{(Number((data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.[\"tx_bytes-r\"] ?? 0) * 8 / 1000000).toFixed(1) + \" Mbps\"}</Text></Paper><Paper withBorder radius=\"md\" p={6}><Text size=\"xs\" c=\"dimmed\">WAN latency</Text><Text size=\"sm\" fw={700} c=\"cyan\">{((data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.uptime_stats?.WAN?.latency_average ?? \"\u2014\") + \" ms\"}</Text></Paper><Paper withBorder radius=\"md\" p={6}><Text size=\"xs\" c=\"dimmed\">Test download</Text><Text size=\"sm\" fw={700} c=\"teal\">{((data.health?.data ?? []).filter(s => s.subsystem === \"www\")?.[0]?.xput_down ?? \"\u2014\") + \" Mbps\"}</Text></Paper><Paper withBorder radius=\"md\" p={6}><Text size=\"xs\" c=\"dimmed\">Test upload</Text><Text size=\"sm\" fw={700} c=\"cyan\">{((data.health?.data ?? []).filter(s => s.subsystem === \"www\")?.[0]?.xput_up ?? \"\u2014\") + \" Mbps\"}</Text></Paper><Paper withBorder radius=\"md\" p={6}><Text size=\"xs\" c=\"dimmed\">Test ping</Text><Text size=\"sm\" fw={700} c=\"cyan\">{((data.health?.data ?? []).filter(s => s.subsystem === \"www\")?.[0]?.speedtest_ping ?? \"\u2014\") + \" ms\"}</Text></Paper></SimpleGrid>}<Group gap={4}><Badge size=\"xs\" variant=\"light\" color=\"teal\">{\"CPU \" + ((data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.[\"gw_system-stats\"]?.cpu ?? \"\u2014\") + \"%\"}</Badge><Badge size=\"xs\" variant=\"light\" color=\"cyan\">{\"MEM \" + ((data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.[\"gw_system-stats\"]?.mem ?? \"\u2014\") + \"%\"}</Badge><Badge size=\"xs\" variant=\"light\" color=\"blue\">{(data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.uptime_stats?.WAN?.availability == null ? \"Uptime \u2014\" : Number((data.health?.data ?? []).filter(s => s.subsystem === \"wan\")?.[0]?.uptime_stats?.WAN?.availability).toFixed(1) + \"% uptime\"}</Badge></Group><Group justify=\"space-between\" gap={2}><Text size=\"9px\" lh={1.3} c=\"dimmed\">Test: {(data.health?.data ?? []).filter(s => s.subsystem === \"www\")?.[0]?.speedtest_lastrun ? Date.toLocaleString(Number((data.health?.data ?? []).filter(s => s.subsystem === \"www\")?.[0]?.speedtest_lastrun) * 1000, \"en-US\") : \"not available\"}</Text></Group></Stack></Grid.Col><Grid.Col span={{base:12,md:8}}><Stack gap={6}>  <Group justify=\"space-between\" wrap=\"nowrap\" gap={6}>\n    <Accordion keepMounted defaultValue={null} style={{flex:1,minWidth:0}}><Accordion.Item value=\"filter\" style={{border:0}}><Accordion.Control p={0} styles={{label:{padding:\"calc(4px * var(--mantine-scale,1)) 0\",fontFamily:\"inherit\",fontSize:\"calc(13px * var(--mantine-scale,1))\"}}}>Filter clients{inputs.search ? \" \u00b7 active\" : \"\"}</Accordion.Control><Accordion.Panel styles={{content:{padding:\"calc(4px * var(--mantine-scale,1)) 0\"}}}><TextInput bind=\"search\" defaultValue=\"\" placeholder=\"Name, IP or MAC\u2026\" aria-label=\"Filter clients\" size=\"xs\" style={{ flex: 1 }} /></Accordion.Panel></Accordion.Item></Accordion>\n    <RefreshButton requestId=\"clients\" />\n  </Group>\n\n  {status.clients?.loading && !data.clients ? (\n    <Skeleton height={120} radius=\"md\" />\n  ) : status.clients?.ok === false ? (\n    <Alert color=\"red\" p={6}>Unable to load client list</Alert>\n  ) : (\n    <Tabs defaultValue=\"wireless\" keepMounted={false} variant=\"pills\"><Tabs.List><Tabs.Tab value=\"wireless\" py={3} px={6} fz=\"xs\">Wireless ({(data.clients?.data ?? []).filter(c => !c.is_wired).length})</Tabs.Tab><Tabs.Tab value=\"wired\" py={3} px={6} fz=\"xs\">Wired ({(data.clients?.data ?? []).filter(c => c.is_wired).length})</Tabs.Tab></Tabs.List>\n      <Tabs.Panel value=\"wireless\" pt={4}>\n        {(data.clients?.data ?? [])\n          .filter((c) => !c.is_wired)\n          .length === 0 ? (\n          <Text size=\"xs\" c=\"dimmed\" ta=\"center\">No wireless clients</Text>\n        ) : (\n          <Stack gap={6}><SimpleGrid cols={{base:2,md:4}} spacing={6}>{(data.clients?.data ?? []).filter(c => !c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).sort((a,b) => (Number(b[\"rx_bytes-r\"] ?? 0) + Number(b[\"tx_bytes-r\"] ?? 0)) - (Number(a[\"rx_bytes-r\"] ?? 0) + Number(a[\"tx_bytes-r\"] ?? 0))).slice(((inputs.wirelessPage ?? 1) - 1) * 8, (inputs.wirelessPage ?? 1) * 8).map((c,i) => <Card data-gp=\"unifi-client\" key={c.mac ?? i} withBorder radius=\"md\" p={6} style={{minWidth:0,height:\"100%\"}}>\n <Stack gap={2}>\n  <Group gap={5} wrap=\"nowrap\">{c.dev_id_override || c.dev_id ? <TablerIcon name=\"server\" size={18} /> : <Text size=\"sm\">\ud83d\udcf6</Text>}<Text size=\"xs\" fw={700} lineClamp={2} title={c.name || c.hostname || c.mac} style={{minWidth:0,overflowWrap:\"anywhere\"}}>{c.name || c.hostname || c.mac}</Text></Group>\n  {options.showAddresses ? <Text size=\"9px\" lh={1.3} c=\"dimmed\" style={{overflowWrap:\"anywhere\"}}>{(c.ip ?? \"\") + \" \u00b7 \" + (c.mac ?? \"\")}</Text> : null}\n  <Group gap={3}><Badge size=\"xs\" variant=\"light\" tt=\"none\" color={Number(c.signal ?? -100) >= -60 ? \"green\" : Number(c.signal ?? -100) >= -70 ? \"yellow\" : \"red\"}>{(c.signal ?? \"\u2014\") + \" dBm\"}</Badge>{c.essid ? <Badge size=\"xs\" variant=\"light\" color=\"gray\">{c.essid}</Badge> : null}{c.radio ? <Badge size=\"xs\" variant=\"light\" tt=\"none\" color=\"gray\">{c.radio === \"ng\" ? \"2.4 GHz\" : c.radio === \"na\" ? \"5 GHz\" : c.radio === \"6e\" ? \"6 GHz\" : c.radio}</Badge> : null}</Group>\n  <Text size=\"9px\" lh={1.3} c=\"teal\">{\"\u2193 \" + (Number(c[\"rx_bytes-r\"] ?? 0) * 8 / 1000000).toFixed(2) + \" \u00b7 \u2191 \" + (Number(c[\"tx_bytes-r\"] ?? 0) * 8 / 1000000).toFixed(2) + \" Mbps\"}</Text>\n </Stack>\n</Card>)}</SimpleGrid>{(data.clients?.data ?? []).filter(c => !c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).length > 8 ? <Pagination bind=\"wirelessPage\" defaultValue={1} resetKey={(inputs.search ?? \"\") + \"|\" + (data.clients?.data ?? []).filter(c => !c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).length} total={Math.ceil((data.clients?.data ?? []).filter(c => !c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).length / 8)} size=\"xs\" siblings={0} boundaries={1} /> : null}{(data.clients?.data ?? []).filter(c => !c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).length === 0 ? <Text size=\"xs\" c=\"dimmed\">No matching clients.</Text> : null}</Stack>\n        )}\n      </Tabs.Panel>\n\n      <Tabs.Panel value=\"wired\" pt={4}>\n        {(data.clients?.data ?? [])\n          .filter((c) => c.is_wired)\n          .length === 0 ? (\n          <Text size=\"xs\" c=\"dimmed\" ta=\"center\">No wired clients</Text>\n        ) : (\n          <Stack gap={6}><SimpleGrid cols={{base:2,md:4}} spacing={6}>{(data.clients?.data ?? []).filter(c => c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).sort((a,b) => (Number(b[\"rx_bytes-r\"] ?? 0) + Number(b[\"tx_bytes-r\"] ?? 0)) - (Number(a[\"rx_bytes-r\"] ?? 0) + Number(a[\"tx_bytes-r\"] ?? 0))).slice(((inputs.wiredPage ?? 1) - 1) * 8, (inputs.wiredPage ?? 1) * 8).map((c,i) => <Card data-gp=\"unifi-client\" key={c.mac ?? i} withBorder radius=\"md\" p={6} style={{minWidth:0,height:\"100%\"}}>\n <Stack gap={2}>\n  <Group gap={5} wrap=\"nowrap\">{c.dev_id_override || c.dev_id ? <TablerIcon name=\"server\" size={18} /> : <Text size=\"sm\">\ud83d\udd0c</Text>}<Text size=\"xs\" fw={700} lineClamp={2} title={c.name || c.hostname || c.mac} style={{minWidth:0,overflowWrap:\"anywhere\"}}>{c.name || c.hostname || c.mac}</Text></Group>\n  {options.showAddresses ? <Text size=\"9px\" lh={1.3} c=\"dimmed\" style={{overflowWrap:\"anywhere\"}}>{(c.ip ?? \"\") + \" \u00b7 \" + (c.mac ?? \"\")}</Text> : null}\n  {c.sw_port ? <Badge size=\"xs\" variant=\"light\" tt=\"none\" color=\"gray\">{\"Port \" + c.sw_port}</Badge> : null}\n  <Text size=\"9px\" lh={1.3} c=\"teal\">{\"\u2193 \" + (Number(c[\"rx_bytes-r\"] ?? 0) * 8 / 1000000).toFixed(2) + \" \u00b7 \u2191 \" + (Number(c[\"tx_bytes-r\"] ?? 0) * 8 / 1000000).toFixed(2) + \" Mbps\"}</Text>\n </Stack>\n</Card>)}</SimpleGrid>{(data.clients?.data ?? []).filter(c => c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).length > 8 ? <Pagination bind=\"wiredPage\" defaultValue={1} resetKey={(inputs.search ?? \"\") + \"|\" + (data.clients?.data ?? []).filter(c => c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).length} total={Math.ceil((data.clients?.data ?? []).filter(c => c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).length / 8)} size=\"xs\" siblings={0} boundaries={1} /> : null}{(data.clients?.data ?? []).filter(c => c.is_wired).filter(c => (String(c.name ?? \"\") + \" \" + String(c.hostname ?? \"\") + \" \" + String(c.ip ?? \"\") + \" \" + String(c.mac ?? \"\")).toLowerCase().includes(String(inputs.search ?? \"\").toLowerCase())).length === 0 ? <Text size=\"xs\" c=\"dimmed\">No matching clients.</Text> : null}</Stack>\n        )}\n      </Tabs.Panel>\n    </Tabs>\n  )}\n\n</Stack></Grid.Col></Grid>"
+}

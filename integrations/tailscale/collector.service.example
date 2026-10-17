@@ -1,0 +1,16 @@
+[Unit]
+Description=Homarr tailscale read-only collector
+After=network-online.target
+[Service]
+Type=simple
+User=homarr-collector
+WorkingDirectory=/opt/homarr-tailscale
+EnvironmentFile=/etc/homarr-tailscale/collector.env
+ExecStart=/usr/bin/python3 /opt/homarr-tailscale/collector.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+[Install]
+WantedBy=multi-user.target

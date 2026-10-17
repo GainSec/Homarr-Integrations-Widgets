@@ -1,0 +1,102 @@
+{
+  "format": 1,
+  "publication_status": "prepared locally; not submitted",
+  "requirements_checked": "2026-10-16",
+  "packages": [
+    {
+      "package": "arcticbase-workbenches",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/arcticbase-workbenches/workshop-submission.json",
+      "helper_required": true,
+      "listing_url": null
+    },
+    {
+      "package": "claude-usage",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/claude-usage/workshop-submission.json",
+      "helper_required": true,
+      "listing_url": null
+    },
+    {
+      "package": "codex-usage",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/codex-usage/workshop-submission.json",
+      "helper_required": true,
+      "listing_url": null
+    },
+    {
+      "package": "dashboard-theme",
+      "eligible": true,
+      "type": "customCss",
+      "metadata": "integrations/dashboard-theme/workshop-submission.json",
+      "helper_required": false,
+      "listing_url": null
+    },
+    {
+      "package": "domain-manager",
+      "eligible": false,
+      "reason": "Privileged Caddy/Technitium helper with iframe UI; not native Custom Widget JSON."
+    },
+    {
+      "package": "gitea-repositories",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/gitea-repositories/workshop-submission.json",
+      "helper_required": false,
+      "listing_url": null
+    },
+    {
+      "package": "guest-assistant",
+      "eligible": false,
+      "reason": "Homarr core source patch and custom image, not a native widget or CSS theme."
+    },
+    {
+      "package": "hermes-chat",
+      "eligible": false,
+      "reason": "Private iframe application with an existing Hermes runtime and authenticated proxy; not native Custom Widget JSON."
+    },
+    {
+      "package": "openwrt-gateway",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/openwrt-gateway/workshop-submission.json",
+      "helper_required": true,
+      "listing_url": null
+    },
+    {
+      "package": "service-directory",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/service-directory/workshop-submission.json",
+      "helper_required": true,
+      "listing_url": null
+    },
+    {
+      "package": "tailscale",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/tailscale/workshop-submission.json",
+      "helper_required": true,
+      "listing_url": null
+    },
+    {
+      "package": "unifi-gateway",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/unifi-gateway/workshop-submission.json",
+      "helper_required": true,
+      "listing_url": null
+    },
+    {
+      "package": "wordpress-stats",
+      "eligible": true,
+      "type": "customWidget",
+      "metadata": "integrations/wordpress-stats/workshop-submission.json",
+      "helper_required": true,
+      "listing_url": null
+    }
+  ]
+}

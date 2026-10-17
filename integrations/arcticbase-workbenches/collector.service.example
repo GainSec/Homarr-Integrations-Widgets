@@ -1,0 +1,16 @@
+[Unit]
+Description=Homarr arcticbase-workbenches read-only collector
+After=network-online.target
+[Service]
+Type=simple
+User=homarr-collector
+WorkingDirectory=/opt/homarr-arcticbase-workbenches
+EnvironmentFile=/etc/homarr-arcticbase-workbenches/collector.env
+ExecStart=/usr/bin/python3 /opt/homarr-arcticbase-workbenches/collector.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+[Install]
+WantedBy=multi-user.target

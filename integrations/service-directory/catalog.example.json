@@ -1,0 +1,9 @@
+[
+  {
+    "url": "https://app.example.net"
+  },
+  {
+    "url": "https://books.example.net",
+    "checkUrl": "https://books.example.net/health"
+  }
+]

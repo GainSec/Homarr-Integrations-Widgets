@@ -1,0 +1,31 @@
+{
+  "$schema": "homarr-custom-widget-v2",
+  "name": "Gitea \u00b7 Recent repositories",
+  "description": "Recently updated repositories from a Gitea API.",
+  "sources": {
+    "default": {
+      "type": "http",
+      "baseUrl": "https://gitea.example.net",
+      "networkScope": "private",
+      "auth": "none"
+    }
+  },
+  "requests": {
+    "repos": {
+      "source": "default",
+      "path": "/api/v1/repos/search",
+      "method": "GET",
+      "kind": "query",
+      "trigger": "load",
+      "query": {
+        "sort": "updated",
+        "order": "desc",
+        "limit": "50"
+      },
+      "cacheSeconds": 60,
+      "auth": "inherit",
+      "permission": "view"
+    }
+  },
+  "template": "<Stack data-gp=\"gitea\" gap={4} p={6} style={{ width: \"100%\", boxSizing: \"border-box\", minHeight: 0, fontFamily: \"inherit\" }}>\n<Group justify=\"space-between\" wrap=\"nowrap\"><Group gap={7}><TablerIcon name=\"git-branch\" size={18}/><Title order={3} size=\"h4\">Recent repos</Title></Group><Group gap={6}><Anchor href=\"https://app.example.net/explore/repos?sort=recentupdate\" target=\"_blank\" size=\"xs\">Gitea \u2197</Anchor><RefreshButton requestId=\"repos\" size=\"xs\"/></Group></Group>\n<Accordion variant=\"default\" keepMounted defaultValue={null}><Accordion.Item value=\"filter\" style={{ border: 0 }}><Accordion.Control p={0} styles={{ label: { padding: \"calc(4px * var(--mantine-scale, 1)) 0\", fontFamily: \"inherit\", fontSize: \"calc(13px * var(--mantine-scale, 1))\" } }}>Filter repositories{inputs.search ? \" \u00b7 active\" : \"\"}</Accordion.Control><Accordion.Panel styles={{content:{padding:\"calc(4px * var(--mantine-scale, 1)) 0\"}}}><TextInput bind=\"search\" defaultValue=\"\" aria-label=\"Filter repositories\" placeholder=\"Repository or owner\u2026\" size=\"xs\"/></Accordion.Panel></Accordion.Item></Accordion>\n{status.repos?.ok === false ? <Alert color=\"red\" title=\"Git service unavailable\">Could not load recent repositories.</Alert> : !data.repos ? <Text size=\"xs\" lh={1.2} c=\"dimmed\">Loading repositories\u2026</Text> : (data.repos?.data ?? []).filter(r => (r.full_name ?? \"\").toLowerCase().includes((inputs.search ?? \"\").toLowerCase())).length === 0 ? <Text size=\"xs\" lh={1.2} c=\"dimmed\">No matching repositories.</Text> : <Stack gap={4}>\n<SimpleGrid cols={2} spacing={6}>{(data.repos?.data ?? []).filter(r => (r.full_name ?? \"\").toLowerCase().includes((inputs.search ?? \"\").toLowerCase())).slice((Number(inputs.page ?? 1)-1)*6,Number(inputs.page ?? 1)*6).map(r => <Paper key={r.id} p={6} withBorder radius=\"md\" style={{background:\"var(--gp-panel, #111c2b)\",borderColor:\"var(--gp-line, #243247)\",minWidth:0}}><Anchor href={r.html_url} target=\"_blank\" rel=\"noopener noreferrer\" title={r.full_name} style={{textDecoration:\"none\",color:\"inherit\"}}><Text size=\"xs\" lh={1.2} fw={600} truncate>{r.name}</Text><Group justify=\"space-between\" gap={3} wrap=\"nowrap\"><Text size=\"xs\" lh={1.2} c=\"dimmed\" truncate>{(r.updated_at ?? \"\").slice(0,10)}</Text><Text size=\"xs\" lh={1.2} c=\"teal\" truncate>{r.language ?? \"\"}</Text></Group></Anchor></Paper>)}</SimpleGrid>\n<Group justify=\"space-between\" gap={4}><Text size=\"xs\" lh={1.2} c=\"dimmed\">Repository updates</Text><Pagination bind=\"page\" defaultValue={1} resetKey={inputs.search ?? \"\"} total={Math.max(1,Math.ceil((data.repos?.data ?? []).filter(r => (r.full_name ?? \"\").toLowerCase().includes((inputs.search ?? \"\").toLowerCase())).length/6))} size=\"xs\" siblings={0}/></Group></Stack>}\n</Stack>"
+}

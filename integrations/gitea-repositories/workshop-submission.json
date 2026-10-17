@@ -1,0 +1,9 @@
+{
+  "type": "customWidget",
+  "title": "Gitea \u00b7 Recent repositories",
+  "description": "Recently updated repositories from a Gitea API. Uses Gitea directly; no helper required. Public repositories can work anonymously. Configure private read-only credentials separately if needed. Setup: see this package's INSTALL.md in the public source release. Add an approved public source URL before submitting. Configure actual service URLs and credentials locally after import; never upload them to Workshop.",
+  "changelog": "Initial public release; portable example URLs and documented local setup.",
+  "contentFile": "widget.json",
+  "widgetSchema": "homarr-custom-widget-v2",
+  "screenshots": []
+}

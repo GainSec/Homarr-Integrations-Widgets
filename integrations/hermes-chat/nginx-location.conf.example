@@ -1,0 +1,13 @@
+# Insert inside your PRIVATE dashboard's existing Nginx server block.
+# Replace placeholders. Never commit the rendered file containing the bridge token.
+# Upstream must resolve from Nginx's own host/container. /hermes-chat/ strips prefix.
+location /hermes-chat/ {
+    proxy_pass http://PRIVATE_COLLECTOR_HOST:18084/;
+    proxy_set_header Authorization "Bearer INSERT_PRIVATE_HOMARR_CHAT_TOKEN";
+    proxy_set_header Host $host;
+    proxy_set_header Origin $http_origin;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_read_timeout 190s;
+    add_header Cache-Control "no-store" always;
+}

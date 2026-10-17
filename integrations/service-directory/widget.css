@@ -1,0 +1,28 @@
+/* User-requested service density; scoped independently from appearance-only skin. */
+[data-gp="directory"]{padding:10px!important}
+[data-gp="service-grid"]{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important}
+[data-gp="service-card"]{padding:7px 8px!important;border-radius:7px!important}
+[data-gp="service-card"] .mantine-Group-root{gap:6px!important}
+[data-gp="service-icon"]{width:20px!important;height:20px!important;flex:0 0 20px!important;padding:2px!important;border-radius:4px!important}
+[data-gp="service-copy"]{gap:1px!important;min-width:0}
+[data-gp="service-name"]{font-size:11px!important;line-height:1.3!important}
+[data-gp="service-description"]{display:none!important}
+[data-gp="service-meta"]{margin-top:4px!important;gap:4px!important}
+[data-gp="service-host"]{font-size:9px!important;min-width:0}
+[data-gp="service-health"]{font-size:9px!important;line-height:1.3!important;flex-shrink:0;color:#8fa6b5!important}
+[data-gp="service-health"][data-state="responding"]{color:#78dcb3!important}
+[data-gp="service-health"][data-state="auth"]{color:#ebcd88!important}
+[data-gp="service-health"][data-state="unavailable"]{color:#f29b9b!important}
+[data-gp="directory-hint"]{font-size:9px!important}
+@media(max-width:1100px){[data-gp="service-grid"]{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:650px){[data-gp="service-grid"]{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important}[data-gp="service-host"]{display:none!important}[data-gp="service-card"]{padding:7px!important}[data-gp="service-meta"]{justify-content:flex-end!important}[data-gp="service-name"]{font-size:11px!important}}
+
+/* Fix double scaling inside the independently zoomed service directory. */
+[data-gp="service-controls"],[data-gp="service-controls"] *{--mantine-scale:1!important}
+[data-gp="service-controls"]{gap:6px!important;margin-bottom:6px!important}
+[data-gp="service-controls"] .mantine-Accordion-label{font-size:12px!important;line-height:16px!important;padding:3px 0!important}
+[data-gp="service-controls"] .mantine-Accordion-chevron{width:12px!important;height:12px!important;flex:0 0 12px!important}
+[data-gp="service-controls"] .mantine-Accordion-chevron svg{width:12px!important;height:12px!important}
+[data-gp="service-controls"] .mantine-ActionIcon-root{width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important}
+[data-gp="service-controls"] [data-gp="service-search"]{margin-bottom:4px!important}
+[data-gp="service-controls"] [data-gp="service-search"] input{height:30px!important;min-height:30px!important;font-size:12px!important}

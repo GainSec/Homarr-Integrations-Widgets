@@ -1,0 +1,16 @@
+[Unit]
+Description=Homarr wordpress-stats
+After=network-online.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/homarr/wordpress-stats
+Environment=WORDPRESS_CONFIG=/etc/homarr-wordpress/config.json
+EnvironmentFile=-/etc/homarr-wordpress/deployment.env
+ExecStart=/usr/bin/python3 /opt/homarr/wordpress-stats/server.py
+RuntimeDirectory=homarr-wordpress
+RuntimeDirectoryMode=0750
+UMask=0077
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target

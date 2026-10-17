@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+config.json
+oauth.json
+state/
+*.sock
+*.env

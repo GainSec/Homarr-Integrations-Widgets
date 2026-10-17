@@ -1,0 +1,15 @@
+[Unit]
+Description=Homarr fixed service health collector
+After=network-online.target
+[Service]
+User=homarr-services
+WorkingDirectory=/opt/homarr/service-directory
+EnvironmentFile=/etc/homarr-services/collector.env
+ExecStart=/usr/bin/python3 /opt/homarr/service-directory/collector.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target

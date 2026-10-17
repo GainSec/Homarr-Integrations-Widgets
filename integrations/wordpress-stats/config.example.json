@@ -1,0 +1,11 @@
+{
+  "proxy_token": "<GENERATE_PROXY_TOKEN>",
+  "read_token": "<GENERATE_DISTINCT_READ_TOKEN>",
+  "oauth_file": "/etc/homarr-wordpress/oauth.json",
+  "state_dir": "/var/lib/homarr-wordpress",
+  "socket_path": "/run/homarr-wordpress/app.sock",
+  "socket_gid": 101,
+  "site_id": "123456789",
+  "site_label": "blog.example.net",
+  "public_base_url": "https://dashboard.example.net"
+}

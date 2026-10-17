@@ -1,0 +1,9 @@
+{
+  "type": "customCss",
+  "title": "Aurora Teal \u00b7 Terminal dashboard theme",
+  "description": "Green \u2192 teal \u2192 blue appearance CSS with reduced-motion support. No personal background, hosted font or dashboard layout is bundled. Back up your existing board CSS before applying. Setup: see this package's INSTALL.md in the public source release. Add an approved public source URL before submitting. Configure actual service URLs and credentials locally after import; never upload them to Workshop.",
+  "changelog": "Initial public release; portable example URLs and documented local setup.",
+  "contentFile": "theme.css",
+  "widgetSchema": "homarr-custom-css-v1",
+  "screenshots": []
+}

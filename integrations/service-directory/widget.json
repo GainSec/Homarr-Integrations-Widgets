@@ -1,0 +1,34 @@
+{
+  "$schema": "homarr-custom-widget-v2",
+  "name": "Services",
+  "description": "Compact read-only service health directory.",
+  "sources": {
+    "default": {
+      "type": "http",
+      "baseUrl": "http://collector.example.net:18085",
+      "networkScope": "private",
+      "auth": "bearer"
+    }
+  },
+  "requests": {
+    "health": {
+      "source": "default",
+      "path": "/services/status",
+      "method": "GET",
+      "kind": "query",
+      "trigger": "load",
+      "cacheSeconds": 30,
+      "auth": "inherit",
+      "permission": "view"
+    }
+  },
+  "options": {
+    "catalog": {
+      "label": "Service directory",
+      "description": "Category | name | URL | icon | description, one service per line.",
+      "control": "textarea",
+      "default": "Apps|Example App|https://app.example.net|server|Example application\nApps|Books|https://books.example.net|bookmark|Example library"
+    }
+  },
+  "template": "<Stack attributes={{root:{\"data-gp\":\"directory\"}}} gap={0}><Group data-gp=\"service-controls\" wrap=\"nowrap\" align=\"flex-start\" gap={6}><Accordion variant=\"default\" keepMounted defaultValue={null} style={{flex:1,minWidth:0}}><Accordion.Item value=\"search\" style={{border:0}}><Accordion.Control p={0} styles={{label:{padding:\"calc(4px * var(--mantine-scale, 1)) 0\",fontFamily:\"inherit\",fontSize:\"calc(13px * var(--mantine-scale, 1))\"}}}>Search services{inputs.search ? \" \u00b7 active\" : \"\"}</Accordion.Control><Accordion.Panel styles={{content:{padding:\"calc(4px * var(--mantine-scale, 1)) 0\"}}}><TextInput attributes={{root:{\"data-gp\":\"service-search\"}}} bind=\"search\" defaultValue=\"\" placeholder=\"Search apps, tools, hosts...\" aria-label=\"Search services\" /></Accordion.Panel></Accordion.Item></Accordion><RefreshButton requestId=\"health\" size=\"xs\"/></Group><SegmentedControl attributes={{root:{\"data-gp\":\"category-tabs\"}}} bind=\"category\" defaultValue=\"All\" data={[\"All\",\"Apps\"]} fullWidth /><Select attributes={{root:{\"data-gp\":\"category-select\"}}} bind=\"category\" defaultValue=\"All\" label=\"Category\" data={[\"All\",\"Apps\"]} allowDeselect={false} /><ScrollArea attributes={{root:{\"data-gp\":\"directory-scroll\"}}} scrollbars=\"y\" type=\"auto\" offsetScrollbars><SimpleGrid attributes={{root:{\"data-gp\":\"service-grid\"}}} cols={3} spacing=\"sm\">{(options.catalog ?? \"\").split(\"\\n\").filter(row => row.trim().length > 0).map(row => row.split(\"|\")).map(fields => ({category:fields[0], name:fields[1], url:fields[2], icon:fields[3], description:fields[4], host:fields[2].split(\"/\")[2]})).filter(service => ((inputs.category ?? \"All\") === \"All\" || service.category === inputs.category) && (service.name + \" \" + service.description + \" \" + service.host).toLowerCase().includes((inputs.search ?? \"\").toLowerCase())).map(service => ({...service,health:data.health?.services?.[service.url]})).map(service => <Anchor attributes={{root:{\"data-gp\":\"service-card\",\"data-category\":service.category}}} key={service.url} href={service.url} target=\"_blank\" underline=\"never\"><Group wrap=\"nowrap\" gap=\"sm\"><TablerIcon name={service.icon || \"server\"} size={24} /><Stack attributes={{root:{\"data-gp\":\"service-copy\"}}} gap={3}><Text attributes={{root:{\"data-gp\":\"service-name\"}}} lineClamp={1}>{service.name}</Text><Text attributes={{root:{\"data-gp\":\"service-description\"}}} lineClamp={1}>{service.description}</Text></Stack></Group><Group attributes={{root:{\"data-gp\":\"service-meta\"}}} justify=\"space-between\" wrap=\"nowrap\"><Text attributes={{root:{\"data-gp\":\"service-host\"}}} lineClamp={1}>{service.host}</Text><Text attributes={{root:{\"data-gp\":\"service-health\",\"data-state\":status.health?.ok === false || data.health?.stale ? \"unknown\" : service.health?.state ?? \"unknown\"}}} title={service.health?.reason ?? (service.health?.status ? \"HTTP \" + service.health.status : \"No recent HTTP result\")} lineClamp={1}>{status.health?.ok === false ? \"\u25cf Unknown\" : data.health?.stale ? \"\u25cf Stale\" : !service.health ? \"\u25cb Checking\" : service.health.state === \"responding\" ? \"\u25cf Online\" : service.health.state === \"auth\" ? \"\u25cf Login\" : \"\u25cf \" + (service.health.status ?? \"Offline\")}</Text></Group></Anchor>)}</SimpleGrid>{(options.catalog ?? \"\").split(\"\\n\").filter(row => row.trim().length > 0).map(row => row.split(\"|\")).map(fields => ({category:fields[0], name:fields[1], url:fields[2], icon:fields[3], description:fields[4], host:fields[2].split(\"/\")[2]})).filter(service => ((inputs.category ?? \"All\") === \"All\" || service.category === inputs.category) && (service.name + \" \" + service.description + \" \" + service.host).toLowerCase().includes((inputs.search ?? \"\").toLowerCase())).length === 0 ? <Stack attributes={{root:{\"data-gp\":\"empty\"}}} align=\"center\"><Text fw={600}>No matching services.</Text><Text size=\"sm\" c=\"dimmed\">Clear the search or choose All.</Text></Stack> : null}</ScrollArea></Stack>"
+}

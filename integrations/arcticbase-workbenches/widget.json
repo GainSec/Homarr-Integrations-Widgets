@@ -1,0 +1,51 @@
+{
+  "$schema": "homarr-custom-widget-v2",
+  "name": "ArcticBase Workbenches",
+  "description": "Read-only allowlisted workbench and object metadata: no content, response payloads or custom fields. Titles, filenames and descriptions may themselves be sensitive. Only show them to intended viewers.",
+  "sources": {
+    "default": {
+      "type": "http",
+      "baseUrl": "http://collector.example.net:18085",
+      "networkScope": "private",
+      "auth": "bearer"
+    }
+  },
+  "requests": {
+    "workbenches": {
+      "path": "/arctic/workbenches",
+      "method": "GET",
+      "trigger": "load",
+      "cacheSeconds": 60
+    },
+    "objects": {
+      "path": "/arctic/workbenches/{param:slug}/objects",
+      "method": "GET",
+      "trigger": "manual",
+      "cacheSeconds": 60
+    }
+  },
+  "options": {
+    "workbenchLimit": {
+      "label": "Maximum workbenches",
+      "control": "number",
+      "default": 15,
+      "min": 1,
+      "max": 40
+    },
+    "artifactLimit": {
+      "label": "Recent artifacts per list",
+      "control": "number",
+      "default": 6,
+      "min": 1,
+      "max": 30
+    },
+    "listHeight": {
+      "label": "Scrollable list height (px)",
+      "control": "number",
+      "default": 130,
+      "min": 100,
+      "max": 1200
+    }
+  },
+  "template": "<Stack data-gp=\"arctic\" gap={4} p={6} style={{ width: \"100%\", boxSizing: \"border-box\", fontFamily: \"inherit\", background: \"transparent\", borderRadius: \"16px\", color: \"var(--gp-text, #e5edf7)\", minHeight: 0 }}>\n  <Group justify=\"space-between\" align=\"flex-start\" wrap=\"nowrap\">\n    <Stack gap={3}><Title order={3} size=\"h4\" style={{ fontFamily: \"inherit\" }}>ArcticBase Workbenches</Title></Stack>\n    <Group gap=\"xs\"><Badge variant=\"light\" color=\"cyan\" size=\"sm\">Read only</Badge><RefreshButton aria-label=\"Refresh ArcticBase\" /></Group>\n  </Group>\n  <Accordion variant=\"default\" keepMounted defaultValue={null}><Accordion.Item value=\"filter\" style={{ border: 0 }}><Accordion.Control p={0} styles={{ label: { padding: \"calc(4px * var(--mantine-scale, 1)) 0\", fontFamily: \"inherit\", fontSize: \"calc(13px * var(--mantine-scale, 1))\" } }}>Filter{inputs.search ? \" \u00b7 active\" : \"\"}</Accordion.Control><Accordion.Panel styles={{ content: { padding: \"calc(4px * var(--mantine-scale, 1)) 0\" } }}><TextInput bind=\"search\" defaultValue=\"\" aria-label=\"Filter\" placeholder=\"Search names, tags or descriptions\u2026\" size=\"xs\" /></Accordion.Panel></Accordion.Item></Accordion>\n  {status.workbenches?.loading ? <Stack><Skeleton height={64} /><Skeleton height={64} /><Skeleton height={64} /></Stack> : status.workbenches?.ok === false || status.workbenches?.error ? <Alert color=\"red\" title=\"ArcticBase unavailable\">The workbench list could not be refreshed. Use Refresh ArcticBase to retry.</Alert> : <Stack gap=\"xs\">\n    <Group justify=\"space-between\"><Text size=\"xs\" c=\"dimmed\">{(data.workbenches ?? []).filter(w => (w.title + \" \" + w.slug + \" \" + (w.description ?? \"\") + \" \" + (w.tags ?? []).join(\" \")).toLowerCase().includes((inputs.search ?? \"\").trim().toLowerCase())).length} / {(data.workbenches ?? []).length} workbenches</Text><Text size=\"xs\" c=\"dimmed\">Updated \u2193</Text></Group>\n    {(data.workbenches ?? []).filter(w => (w.title + \" \" + w.slug + \" \" + (w.description ?? \"\") + \" \" + (w.tags ?? []).join(\" \")).toLowerCase().includes((inputs.search ?? \"\").trim().toLowerCase())).length === 0 ? <Alert color=\"cyan\" title=\"No matching workbenches\">Try another name or tag, or clear the filter.</Alert> : <ScrollArea.Autosize mah={{base:100,sm:options.listHeight}} type=\"auto\" offsetScrollbars><Box style={{display: \"grid\", gridTemplateColumns: \"repeat(auto-fill, minmax(min(100%, calc(220px * var(--mantine-scale, 1))), 1fr))\", gap: \"calc(8px * var(--mantine-scale, 1))\", alignItems: \"start\"}}>\n      {(data.workbenches ?? []).filter(w => (w.title + \" \" + w.slug + \" \" + (w.description ?? \"\") + \" \" + (w.tags ?? []).join(\" \")).toLowerCase().includes((inputs.search ?? \"\").trim().toLowerCase())).sort((a,b) => (b.updated_at ?? b.created_at ?? \"\").localeCompare(a.updated_at ?? a.created_at ?? \"\") || (a.title ?? \"\").localeCompare(b.title ?? \"\")).slice(0, options.workbenchLimit).map(w => <Paper data-gp-entry=\"project\" key={w.slug} p=\"xs\" withBorder radius=\"md\" style={{ background: \"var(--gp-panel, #111c2b)\", borderColor: \"var(--gp-line, #243247)\" }}>\n        <SubFetch requestId=\"objects\" trigger=\"manual\" params={{ slug: w.slug }} loadingLabel=\"Loading recent artifacts\u2026\" errorMessage=\"Could not load this workbench. Retry to reconnect.\" triggerAriaLabel={\"Show artifacts for \" + w.title} triggerContent={<Stack gap={3}>\n          <Group justify=\"space-between\" wrap=\"nowrap\" align=\"flex-start\"><Text fw={600} size=\"sm\" c=\"var(--gp-text, #e5edf7)\" style={{ overflowWrap: \"anywhere\" }}>{w.title}</Text><Text size=\"sm\" c=\"cyan\">\u2197</Text></Group>\n          <Group gap={4}>{(w.tags ?? []).slice(0,2).map(tag => <Badge key={tag} variant=\"light\" color=\"cyan\" size=\"xs\">{tag}</Badge>)}</Group>\n        </Stack>}>\n          {(objects, meta) => <Stack gap=\"xs\">\n  <Group justify=\"space-between\" wrap=\"wrap\"><Stack gap={2}><Anchor href={\"https://app.example.net/wb/\" + w.slug} target=\"_blank\" rel=\"noopener noreferrer\" fw={700}>{w.title}</Anchor><Text size=\"xs\" c=\"dimmed\">{(objects ?? []).length} artifacts \u00b7 newest first</Text></Stack><RefreshButton requestId=\"objects\" aria-label=\"Refresh workbench artifacts\" /></Group>\n  <Tabs defaultValue=\"objects\" keepMounted={false}>\n    <Tabs.List grow><Tabs.Tab value=\"objects\">Objects ({(objects ?? []).filter(o => !o.archived && ![\"file\", \"image\"].includes(o.kind)).length})</Tabs.Tab><Tabs.Tab value=\"files\">Files ({(objects ?? []).filter(o => !o.archived && [\"file\", \"image\"].includes(o.kind)).length})</Tabs.Tab></Tabs.List>\n    <Tabs.Panel value=\"objects\" pt=\"sm\">{(objects ?? []).filter(o => !o.archived && ![\"file\", \"image\"].includes(o.kind)).length === 0 ? <Text c=\"dimmed\" size=\"sm\">No objects in this workbench.</Text> : <Stack gap=\"xs\">{(objects ?? []).filter(o => !o.archived && ![\"file\", \"image\"].includes(o.kind)).sort((a,b) => (b.updated_at ?? b.created_at ?? \"\").localeCompare(a.updated_at ?? a.created_at ?? \"\") || (a.title ?? \"\").localeCompare(b.title ?? \"\")).slice(0, options.artifactLimit).map(o => <Paper key={o.id} p=\"xs\" radius=\"md\" withBorder><Group justify=\"space-between\" wrap=\"nowrap\" align=\"flex-start\"><Stack gap={3} style={{ minWidth: 0 }}><Anchor href={\"https://app.example.net/wb/\" + w.slug + \"/o/\" + o.id} target=\"_blank\" rel=\"noopener noreferrer\" size=\"sm\" fw={600} style={{ overflowWrap: \"anywhere\" }}>{o.title || o.filename || \"Untitled\"}</Anchor><Text size=\"xs\" c=\"dimmed\" style={{ overflowWrap: \"anywhere\" }}>{o.filename || o.kind} \u00b7 {Date.toLocaleString(o.updated_at ?? o.created_at, \"en-US\")}</Text></Stack><Badge size=\"xs\" variant=\"light\" color=\"cyan\">{o.kind}</Badge></Group></Paper>)}</Stack>}</Tabs.Panel>\n    <Tabs.Panel value=\"files\" pt=\"sm\">{(objects ?? []).filter(o => !o.archived && [\"file\", \"image\"].includes(o.kind)).length === 0 ? <Text c=\"dimmed\" size=\"sm\">No files in this workbench.</Text> : <Stack gap=\"xs\">{(objects ?? []).filter(o => !o.archived && [\"file\", \"image\"].includes(o.kind)).sort((a,b) => (b.updated_at ?? b.created_at ?? \"\").localeCompare(a.updated_at ?? a.created_at ?? \"\") || (a.title ?? \"\").localeCompare(b.title ?? \"\")).slice(0, options.artifactLimit).map(o => <Paper key={o.id} p=\"xs\" radius=\"md\" withBorder><Group justify=\"space-between\" wrap=\"nowrap\" align=\"flex-start\"><Stack gap={3} style={{ minWidth: 0 }}><Anchor href={\"https://app.example.net/wb/\" + w.slug + \"/o/\" + o.id} target=\"_blank\" rel=\"noopener noreferrer\" size=\"sm\" fw={600} style={{ overflowWrap: \"anywhere\" }}>{o.title || o.filename || \"Untitled\"}</Anchor><Text size=\"xs\" c=\"dimmed\" style={{ overflowWrap: \"anywhere\" }}>{o.filename || o.kind} \u00b7 {Date.toLocaleString(o.updated_at ?? o.created_at, \"en-US\")}</Text></Stack><Badge size=\"xs\" variant=\"light\" color=\"cyan\">{o.kind}</Badge></Group></Paper>)}</Stack>}</Tabs.Panel>\n  </Tabs>\n</Stack>}\n        </SubFetch>\n      </Paper>)}\n    </Box></ScrollArea.Autosize>}\n  </Stack>}\n  <Group justify=\"space-between\" gap=\"xs\"><Anchor href=\"https://app.example.net\" target=\"_blank\" rel=\"noopener noreferrer\" size=\"xs\" c=\"cyan\">Open ArcticBase \u2197</Anchor></Group>\n</Stack>"
+}

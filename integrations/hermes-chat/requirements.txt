@@ -1,0 +1,2 @@
+aiohttp>=3.10,<4
+# Hermes service_runner uses the installed managed Hermes runtime/dependency generation.

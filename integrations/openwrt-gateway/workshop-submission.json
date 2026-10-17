@@ -1,0 +1,9 @@
+{
+  "type": "customWidget",
+  "title": "OpenWrt Gateway",
+  "description": "Read-only router health, traffic deltas, CPU/memory, real ping and eight clients per page. Wi-Fi associated, reachable, seen and DHCP-only differ. Cached neighbors and leases are not proof of connectivity; LAN neighbors do not claim physically wired transport. Requires the included Python collector and documented restricted SSH snapshot command on OpenWrt. Setup: see this package's INSTALL.md in the public source release. Add an approved public source URL before submitting. Configure actual service URLs and credentials locally after import; never upload them to Workshop.",
+  "changelog": "Initial public release; portable example URLs and documented local setup.",
+  "contentFile": "widget.json",
+  "widgetSchema": "homarr-custom-widget-v2",
+  "screenshots": []
+}

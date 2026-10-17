@@ -1,0 +1,685 @@
+diff --git a/apps/nextjs/src/app/api/assistant/guest/[boardId]/route.ts b/apps/nextjs/src/app/api/assistant/guest/[boardId]/route.ts
+new file mode 100644
+index 00000000..b6d64659
+--- /dev/null
++++ b/apps/nextjs/src/app/api/assistant/guest/[boardId]/route.ts
+@@ -0,0 +1,143 @@
++import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
++import { streamText } from "ai";
++import { cookies } from "next/headers";
++import { z } from "zod/v4";
++import { decryptSecret, resolveRequestIdentity } from "@homarr/common/server";
++import { and, db, eq } from "@homarr/db";
++import { assistantConfigurations, boards, items } from "@homarr/db/schema";
++import { readAssistantRequestBodyAsync } from "../../chat/assistant-request-body";
++import {
++  createVisitorToken,
++  GuestBudget,
++  isGuestBoardAllowed,
++  validateMessages,
++  validateVisitorToken,
++} from "../policy";
++
++export const dynamic = "force-dynamic";
++const budget = new GuestBudget();
++const cookieName = "homarr.guest-assistant";
++const noStore = { "Cache-Control": "no-store" };
++const error = (message: string, status: number) => Response.json({ error: message }, { status, headers: noStore });
++type Context = { params: Promise<{ boardId: string }> };
++
++async function allowed(boardId: string) {
++  if (process.env.HOMARR_GUEST_ASSISTANT !== "true" || boardId.length > 128) return false;
++  const board = await db.query.boards.findFirst({ where: eq(boards.id, boardId), columns: { isPublic: true } });
++  const placement = board?.isPublic
++    ? await db.query.items.findFirst({
++        where: and(eq(items.boardId, boardId), eq(items.kind, "assistant")),
++        columns: { id: true },
++      })
++    : null;
++  return isGuestBoardAllowed(true, !!board?.isPublic, !!placement);
++}
++
++export async function GET(_request: Request, context: Context) {
++  const { boardId } = await context.params;
++  if (!(await allowed(boardId))) return error("Guest Assistant is not enabled for this board.", 404);
++  const configuration = await db.query.assistantConfigurations.findFirst({
++    where: eq(assistantConfigurations.id, "default"),
++  });
++  if (!configuration?.enabled || !configuration.modelId || configuration.provider !== "custom") {
++    return error("Guest Assistant requires an enabled custom model provider.", 503);
++  }
++  const secret = process.env.SECRET_ENCRYPTION_KEY;
++  if (!secret) return error("Guest Assistant is unavailable.", 503);
++  const jar = await cookies();
++  if (!validateVisitorToken(jar.get(cookieName)?.value, secret)) {
++    jar.set(cookieName, createVisitorToken(secret), {
++      httpOnly: true,
++      sameSite: "strict",
++      path: "/api/assistant/guest",
++      maxAge: 86400,
++    });
++  }
++  return Response.json({ enabled: true }, { headers: noStore });
++}
++
++export async function POST(request: Request, context: Context) {
++  const { boardId } = await context.params;
++  if (!(await allowed(boardId))) return error("Guest Assistant is not enabled for this board.", 404);
++  const origin = request.headers.get("origin");
++  try {
++    if (!origin || new URL(origin).host !== request.headers.get("host"))
++      return error("Use chat from this dashboard.", 403);
++  } catch {
++    return error("Use chat from this dashboard.", 403);
++  }
++  const secret = process.env.SECRET_ENCRYPTION_KEY;
++  const visitor = (await cookies()).get(cookieName)?.value;
++  if (!secret || !visitor || !validateVisitorToken(visitor, secret)) return error("Reload the guest chat first.", 401);
++  const release = budget.acquire(resolveRequestIdentity(request.headers).key, visitor);
++  if (!release) return error("Chat is busy. Please try again in a minute.", 429);
++  try {
++    const raw = await readAssistantRequestBodyAsync(request, 32768);
++    if (raw === null) {
++      release();
++      return error("This conversation is too large. Start a new chat.", 413);
++    }
++    let body: unknown;
++    try {
++      body = JSON.parse(raw);
++    } catch {
++      release();
++      return error("Invalid chat request.", 400);
++    }
++    const parsed = z.object({ messages: z.unknown() }).safeParse(body);
++    if (!parsed.success || !validateMessages(parsed.data.messages)) {
++      release();
++      return error("Send up to 20 text messages, at most 2000 characters each.", 400);
++    }
++    const configuration = await db.query.assistantConfigurations.findFirst({
++      where: eq(assistantConfigurations.id, "default"),
++    });
++    if (!configuration?.enabled || !configuration.modelId || configuration.provider !== "custom") {
++      release();
++      return error("Guest Assistant is unavailable.", 503);
++    }
++    const headers = configuration.encryptedHeaders
++      ? z.record(z.string(), z.string()).parse(JSON.parse(decryptSecret(configuration.encryptedHeaders)))
++      : {};
++    const provider = createOpenAICompatible({
++      name: "homarr-guest",
++      baseURL: configuration.baseUrl,
++      apiKey: configuration.encryptedApiKey ? decryptSecret(configuration.encryptedApiKey) : undefined,
++      headers,
++    });
++    const result = streamText({
++      model: provider(configuration.modelId),
++      system:
++        "You are the guest Assistant on the shared dashboard. Be helpful and concise. You have no tools, no access to Homarr management, connected services, private information, or other visitors’ chats. Do not claim to inspect or change devices or dashboards.",
++      messages: parsed.data.messages,
++      maxOutputTokens: 1024,
++      abortSignal: AbortSignal.any([request.signal, AbortSignal.timeout(90000)]),
++    });
++    const source = result.textStream[Symbol.asyncIterator]();
++    const encoder = new TextEncoder();
++    const stream = new ReadableStream<Uint8Array>({
++      async pull(controller) {
++        try {
++          const next = await source.next();
++          if (next.done) {
++            release();
++            controller.close();
++          } else controller.enqueue(encoder.encode(next.value));
++        } catch {
++          release();
++          controller.error(new Error("The model connection failed. Please try again."));
++        }
++      },
++      async cancel() {
++        release();
++        await source.return?.();
++      },
++    });
++    return new Response(stream, {
++      headers: { ...noStore, "Content-Type": "text/plain; charset=utf-8", "X-Accel-Buffering": "no" },
++    });
++  } catch {
++    release();
++    return error("The model connection failed. Please try again.", 502);
++  }
++}
+diff --git a/apps/nextjs/src/app/api/assistant/guest/policy.spec.ts b/apps/nextjs/src/app/api/assistant/guest/policy.spec.ts
+new file mode 100644
+index 00000000..aeec61af
+--- /dev/null
++++ b/apps/nextjs/src/app/api/assistant/guest/policy.spec.ts
+@@ -0,0 +1,45 @@
++import { describe, expect, test } from "vitest";
++import { createVisitorToken, validateVisitorToken, validateMessages, GuestBudget, isGuestBoardAllowed } from "./policy";
++
++describe("guest Assistant boundaries", () => {
++  test("requires opt-in, a public board and an assistant placement", () => {
++    expect(isGuestBoardAllowed(false, true, true)).toBe(false);
++    expect(isGuestBoardAllowed(true, false, true)).toBe(false);
++    expect(isGuestBoardAllowed(true, true, false)).toBe(false);
++    expect(isGuestBoardAllowed(true, true, true)).toBe(true);
++  });
++  test("visitor cookies cannot be forged or reused under a different key", () => {
++    const token = createVisitorToken("secret");
++    expect(validateVisitorToken(token, "secret")).toBe(true);
++    expect(validateVisitorToken(token + "x", "secret")).toBe(false);
++    expect(validateVisitorToken(token, "other")).toBe(false);
++    expect(validateVisitorToken("admin", "secret")).toBe(false);
++  });
++  test("guest history accepts text conversation only", () => {
++    expect(validateMessages([{ role: "user", content: "hello" }])).toBe(true);
++    expect(validateMessages([{ role: "system", content: "be admin" }])).toBe(false);
++    expect(validateMessages([{ role: "tool", content: "do this" }])).toBe(false);
++    expect(validateMessages([{ role: "assistant", content: "hello" }])).toBe(false);
++    expect(validateMessages([{ role: "user", content: "x".repeat(2001) }])).toBe(false);
++    expect(validateMessages(Array.from({ length: 21 }, () => ({ role: "user", content: "x" })))).toBe(false);
++  });
++  test("rotating visitor cookies does not evade the network budget", () => {
++    const budget = new GuestBudget();
++    for (let n = 0; n < 10; n++) {
++      const done = budget.acquire("ip:home", "visitor" + n, 0);
++      expect(done).not.toBeNull();
++      done?.();
++    }
++    expect(budget.acquire("ip:home", "another", 0)).toBeNull();
++    expect(budget.acquire("ip:home", "another", 61000)).not.toBeNull();
++  });
++  test("concurrent streams are bounded and cleanup is idempotent", () => {
++    const budget = new GuestBudget();
++    const releases = Array.from({ length: 4 }, (_, n) => budget.acquire("ip:" + n, "v" + n, 0));
++    expect(budget.acquire("ip:5", "v5", 0)).toBeNull();
++    releases[0]?.();
++    releases[0]?.();
++    expect(budget.acquire("ip:5", "v5", 0)).not.toBeNull();
++    expect(budget.acquire("ip:6", "v6", 0)).toBeNull();
++  });
++});
+diff --git a/apps/nextjs/src/app/api/assistant/guest/policy.ts b/apps/nextjs/src/app/api/assistant/guest/policy.ts
+new file mode 100644
+index 00000000..07e6e8b1
+--- /dev/null
++++ b/apps/nextjs/src/app/api/assistant/guest/policy.ts
+@@ -0,0 +1,59 @@
++import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
++
++export const isGuestBoardAllowed = (enabled: boolean, publicBoard: boolean, assistantPlaced: boolean) =>
++  enabled && publicBoard && assistantPlaced;
++
++export function createVisitorToken(secret: string) {
++  const id = randomBytes(24).toString("hex");
++  return `${id}.${createHmac("sha256", secret).update(`guest-assistant:${id}`).digest("hex")}`;
++}
++export function validateVisitorToken(token: string | undefined, secret: string) {
++  if (!token || !/^[a-f0-9]{48}\.[a-f0-9]{64}$/.test(token)) return false;
++  const [id, signature] = token.split(".");
++  const expected = createHmac("sha256", secret).update(`guest-assistant:${id}`).digest("hex");
++  return timingSafeEqual(Buffer.from(signature ?? ""), Buffer.from(expected));
++}
++export type GuestMessage = { role: "user" | "assistant"; content: string };
++export function validateMessages(messages: unknown): messages is GuestMessage[] {
++  return (
++    Array.isArray(messages) &&
++    messages.length > 0 &&
++    messages.length <= 20 &&
++    messages.at(-1)?.role === "user" &&
++    messages.every(
++      (message) =>
++        message &&
++        (message.role === "user" || message.role === "assistant") &&
++        typeof message.content === "string" &&
++        message.content.trim().length > 0 &&
++        message.content.length <= 2000,
++    )
++  );
++}
++
++export class GuestBudget {
++  private windows = new Map<string, { count: number; expires: number }>();
++  private active = 0;
++  acquire(network: string, visitor: string, now = Date.now()): (() => void) | null {
++    for (const [key, window] of this.windows) if (window.expires <= now) this.windows.delete(key);
++    const limits: [string, number][] = [
++      ["global", 60],
++      [`network:${network}`, 10],
++      [`visitor:${visitor}`, 10],
++    ];
++    if (this.active >= 4 || limits.some(([key, limit]) => (this.windows.get(key)?.count ?? 0) >= limit)) return null;
++    for (const [key] of limits) {
++      const window = this.windows.get(key) ?? { count: 0, expires: now + 60000 };
++      window.count++;
++      this.windows.set(key, window);
++    }
++    this.active++;
++    let released = false;
++    return () => {
++      if (!released) {
++        this.active--;
++        released = true;
++      }
++    };
++  }
++}
+diff --git a/apps/nextjs/src/components/assistant/assistant-guest-widget.module.css b/apps/nextjs/src/components/assistant/assistant-guest-widget.module.css
+new file mode 100644
+index 00000000..a56e1238
+--- /dev/null
++++ b/apps/nextjs/src/components/assistant/assistant-guest-widget.module.css
+@@ -0,0 +1,146 @@
++.panel {
++  display: flex;
++  flex-direction: column;
++  width: 100%;
++  height: 100%;
++  min-height: 0;
++  overflow: hidden;
++  color: #e5edf7;
++  background: #101b2b;
++  font: 13px/1.6 inherit;
++  box-sizing: border-box;
++}
++.header {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  flex-shrink: 0;
++  padding: 12px 14px;
++  border-bottom: 1px solid #29394b;
++  font-size: 13px;
++}
++.badge {
++  margin-left: 8px;
++  padding: 3px 6px;
++  font-size: 10px;
++  color: #a5f3fc;
++  background: #173340;
++  border-radius: 4px;
++}
++.panel button {
++  font: inherit;
++  font-size: 11px;
++  cursor: pointer;
++  border: 1px solid #365066;
++  border-radius: 6px;
++  background: #172a3c;
++  color: #c9f5ff;
++  padding: 5px 9px;
++}
++.panel button:hover {
++  background: #244155;
++}
++.panel button:disabled {
++  opacity: 0.45;
++  cursor: default;
++}
++.panel button:focus-visible,
++.composer textarea:focus-visible {
++  outline: 2px solid #67e8f9;
++  outline-offset: 2px;
++}
++.messages {
++  flex: 1;
++  min-height: 0;
++  overflow-y: auto;
++  padding: 14px;
++  scrollbar-width: thin;
++  overscroll-behavior: contain;
++}
++.welcome {
++  padding: 22px 2px;
++  color: #a8bed3;
++}
++.welcome strong {
++  font-size: 18px;
++  color: #e2f6ff;
++}
++.welcome p {
++  margin: 8px 0;
++}
++.welcome small {
++  font-size: 11px;
++  line-height: 1.6;
++}
++.messages article {
++  margin-bottom: 14px;
++  padding: 10px 12px;
++  border: 1px solid #2a3d50;
++  border-radius: 9px;
++  white-space: pre-wrap;
++  overflow-wrap: anywhere;
++  font-size: 13px;
++  line-height: 1.6;
++}
++.messages article > small {
++  display: block;
++  margin-bottom: 5px;
++  font-size: 10px;
++  color: #92afc8;
++  letter-spacing: 0.6px;
++}
++.user {
++  background: #173044;
++  margin-left: 20px;
++}
++.assistant {
++  background: #132234;
++  margin-right: 10px;
++}
++.error {
++  padding: 8px 12px;
++  color: #fecaca;
++  background: #3b2330;
++  font-size: 11px;
++  flex-shrink: 0;
++}
++.composer {
++  padding: 10px 12px;
++  flex-shrink: 0;
++  border-top: 1px solid #29394b;
++  background: #101b2b;
++}
++.label {
++  position: absolute;
++  width: 1px;
++  height: 1px;
++  clip-path: inset(50%);
++  overflow: hidden;
++}
++.composer textarea {
++  display: block;
++  box-sizing: border-box;
++  width: 100%;
++  resize: none;
++  border: 1px solid #365066;
++  border-radius: 8px;
++  padding: 9px 10px;
++  background: #152537;
++  color: #e2edf6;
++  font: inherit;
++  font-size: 13px;
++  line-height: 1.5;
++  min-height: 64px;
++  max-height: 150px;
++}
++.composer footer {
++  display: flex;
++  gap: 8px;
++  align-items: center;
++  justify-content: space-between;
++  padding-top: 8px;
++}
++.composer footer small {
++  font-size: 9px;
++  color: #8ba2ba;
++}
+diff --git a/apps/nextjs/src/components/assistant/assistant-guest-widget.tsx b/apps/nextjs/src/components/assistant/assistant-guest-widget.tsx
+new file mode 100644
+index 00000000..73881d12
+--- /dev/null
++++ b/apps/nextjs/src/components/assistant/assistant-guest-widget.tsx
+@@ -0,0 +1,202 @@
++"use client";
++
++import { useEffect, useRef, useState } from "react";
++import type { FormEvent } from "react";
++import { useRequiredBoard } from "@homarr/boards/context";
++import styles from "./assistant-guest-widget.module.css";
++
++type Message = { role: "user" | "assistant"; content: string };
++
++export function GuestAssistantBoardWidget() {
++  const board = useRequiredBoard();
++  const endpoint = `/api/assistant/guest/${encodeURIComponent(board.id)}`;
++  const storageKey = `homarr.guest-chat.${board.id}`;
++  const [messages, setMessages] = useState<Message[]>([]);
++  const [input, setInput] = useState("");
++  const [ready, setReady] = useState(false);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const controller = useRef<AbortController | null>(null);
++  const end = useRef<HTMLDivElement>(null);
++  const restored = useRef(false);
++
++  useEffect(() => {
++    let active = true;
++    try {
++      const saved: unknown = JSON.parse(sessionStorage.getItem(storageKey) ?? "[]");
++      if (Array.isArray(saved))
++        setMessages(
++          saved
++            .filter(
++              (m): m is Message => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string",
++            )
++            .slice(-20),
++        );
++    } catch {
++      /* Storage may be disabled. Chat still works in memory. */
++    }
++    restored.current = true;
++    void fetch(endpoint, { cache: "no-store" })
++      .then(async (response) => {
++        if (!active) return;
++        if (response.ok) setReady(true);
++        else {
++          const body = await response.json();
++          setError(body.error ?? "Guest Assistant is unavailable.");
++        }
++      })
++      .catch(() => {
++        if (active) setError("Unable to connect. Reload to try again.");
++      });
++    return () => {
++      active = false;
++      controller.current?.abort();
++    };
++  }, [endpoint, storageKey]);
++
++  useEffect(() => {
++    if (restored.current) {
++      try {
++        sessionStorage.setItem(storageKey, JSON.stringify(messages.slice(-20)));
++      } catch {
++        /* Optional storage. */
++      }
++    }
++    end.current?.scrollIntoView({ block: "nearest" });
++  }, [messages, storageKey]);
++
++  async function send(event: FormEvent) {
++    event.preventDefault();
++    const content = input.trim();
++    if (!content || busy || !ready) return;
++    const history: Message[] = [
++      ...messages
++        .filter((m) => m.content.trim())
++        .slice(-19)
++        .map((m) => ({ ...m, content: m.content.slice(0, 2000) })),
++      { role: "user", content },
++    ];
++    setMessages([...history, { role: "assistant", content: "" }]);
++    setInput("");
++    setError(null);
++    setBusy(true);
++    const abort = new AbortController();
++    controller.current = abort;
++    try {
++      const response = await fetch(endpoint, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ messages: history }),
++        signal: abort.signal,
++      });
++      if (!response.ok) {
++        const body = await response.json();
++        throw new Error(body.error ?? "Unable to send this message.");
++      }
++      if (!response.body) throw new Error("The model returned an empty response.");
++      const reader = response.body.getReader();
++      const decoder = new TextDecoder();
++      let answer = "";
++      for (;;) {
++        const next = await reader.read();
++        if (abort.signal.aborted) return;
++        if (next.done) break;
++        answer += decoder.decode(next.value, { stream: true });
++        setMessages([...history, { role: "assistant", content: answer }]);
++      }
++      if (abort.signal.aborted) return;
++      answer += decoder.decode();
++      if (!answer.trim()) throw new Error("The model returned no text. Please try again.");
++      setMessages([...history, { role: "assistant", content: answer }]);
++    } catch (cause) {
++      if (!abort.signal.aborted)
++        setError(cause instanceof Error ? cause.message : "Connection interrupted. Please try again.");
++    } finally {
++      if (controller.current === abort) {
++        controller.current = null;
++        setBusy(false);
++      }
++    }
++  }
++
++  function clear() {
++    controller.current?.abort();
++    controller.current = null;
++    setBusy(false);
++    setMessages([]);
++    setError(null);
++  }
++
++  return (
++    <section className={styles.panel} data-board-widget="true" aria-label="Guest Assistant" aria-busy={busy}>
++      <header className={styles.header}>
++        <strong>
++          Assistant <span className={styles.badge}>Guest</span>
++        </strong>
++        <button type="button" onClick={clear} aria-label="Start a new guest chat">
++          New chat
++        </button>
++      </header>
++      <div
++        className={styles.messages}
++        role="log"
++        aria-label="Conversation"
++        aria-live="polite"
++        aria-relevant="additions text"
++      >
++        {messages.length === 0 && (
++          <div className={styles.welcome}>
++            <strong>How can I help?</strong>
++            <p>Ask a question without signing in.</p>
++            <small>This chat stays in this browser tab. Guest chat cannot control your services.</small>
++          </div>
++        )}
++        {messages.map((message, index) => (
++          <article key={index} className={message.role === "user" ? styles.user : styles.assistant}>
++            <small>{message.role === "user" ? "You" : "Assistant"}</small>
++            <div>{message.content || (busy ? "Thinking…" : "No response")}</div>
++          </article>
++        ))}
++        <div ref={end} />
++      </div>
++      {error && (
++        <div role="alert" className={styles.error}>
++          {error}
++        </div>
++      )}
++      <form onSubmit={send} className={styles.composer}>
++        <label htmlFor={`guest-prompt-${board.id}`} className={styles.label}>
++          Message Assistant
++        </label>
++        <textarea
++          id={`guest-prompt-${board.id}`}
++          aria-label="Message guest Assistant"
++          placeholder={ready ? "Ask Assistant…" : "Connecting…"}
++          value={input}
++          maxLength={2000}
++          rows={2}
++          disabled={!ready}
++          onChange={(event) => setInput(event.currentTarget.value)}
++          onKeyDown={(event) => {
++            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
++              event.preventDefault();
++              event.currentTarget.form?.requestSubmit();
++            }
++          }}
++        />
++        <footer>
++          <small>Guest chat · no service controls</small>
++          {busy ? (
++            <button type="button" onClick={() => controller.current?.abort()}>
++              Stop
++            </button>
++          ) : (
++            <button type="submit" disabled={!ready || !input.trim()}>
++              Send ↑
++            </button>
++          )}
++        </footer>
++      </form>
++    </section>
++  );
++}
+diff --git a/apps/nextjs/src/components/assistant/assistant-widget-lazy.tsx b/apps/nextjs/src/components/assistant/assistant-widget-lazy.tsx
+index 05945382..1af69656 100644
+--- a/apps/nextjs/src/components/assistant/assistant-widget-lazy.tsx
++++ b/apps/nextjs/src/components/assistant/assistant-widget-lazy.tsx
+@@ -2,6 +2,9 @@
+ 
+ import dynamic from "next/dynamic";
+ 
++import { useSession } from "@homarr/auth/client";
++import { GuestAssistantBoardWidget } from "./assistant-guest-widget";
++
+ import type { WidgetComponentProps } from "@homarr/widgets";
+ 
+ /**
+@@ -13,6 +16,8 @@ const LazyAssistantBoardWidget = dynamic(() =>
+   import("./assistant-widget").then((module) => ({ default: module.AssistantBoardWidget })),
+ );
+ 
+-export const AssistantBoardWidgetLazy = (props: WidgetComponentProps<"assistant">) => (
+-  <LazyAssistantBoardWidget {...props} />
+-);
++export const AssistantBoardWidgetLazy = (props: WidgetComponentProps<"assistant">) => {
++  const { status } = useSession();
++  if (status === "unauthenticated") return <GuestAssistantBoardWidget />;
++  return <LazyAssistantBoardWidget {...props} />;
++};
+diff --git a/deployments/guest-assistant.md b/deployments/guest-assistant.md
+new file mode 100644
+index 00000000..ae14c897
+--- /dev/null
++++ b/deployments/guest-assistant.md
+@@ -0,0 +1,11 @@
++# Local guest Assistant image
++
++This build adds a separate guest chat path inside the board Assistant widget. Signed-in users retain the upstream Assistant.
++
++Set `HOMARR_GUEST_ASSISTANT=true` on Homarr to opt in. Guest chat requires a public board with an Assistant placement and an enabled **custom OpenAI-compatible** provider in Management → Assistant. API keys and headers stay server-side. Public users get text chat only, without Homarr tools, attachments, model selection or service access.
++
++Conversation text is kept in this browser tab's session storage, not in Homarr's conversation tables. New chat clears it. Each request sends up to 20 text messages (2,000 characters per message and 32 KiB total), returns up to 1,024 output tokens, and times out after 90 seconds. Per application process, limits are 10 requests/minute per visitor and trusted network identity, 60/minute total, and 4 active streams. Visitors behind the same proxy identity share the network budget.
++
++Disabling the environment variable, making the board private, or removing its Assistant widget disables the guest route. Admin APIs still require authentication. Existing logged-in cookies are never issued or reused for guests.
++
++The deployment source is based on upstream commit `ebbe134c5e9fa3400266fc8c0199ff54e903634b`. To update upstream, rebase and re-run the focused tests, typecheck, image build and logged-out checks before replacing the deployed image.
+diff --git a/docs/plans/2026-10-15-guest-assistant.md b/docs/plans/2026-10-15-guest-assistant.md
+new file mode 100644
+index 00000000..bca4c6a9
+--- /dev/null
++++ b/docs/plans/2026-10-15-guest-assistant.md
+@@ -0,0 +1,11 @@
++# Guest Assistant implementation
++
++Goal: opt-in anonymous chat on public boards with an Assistant placement, using the configured custom OpenAI-compatible provider. Signed-in Assistant remains unchanged.
++
++1. Test authorization policy, cookie tampering, bounded messages and request limits.
++2. Add a separate guest route: verify public board and placement on every request, same-origin POST, signed HttpOnly visitor cookie, bounded body/history/output, per-visitor/IP/global budgets and bounded concurrency. No tools, integrations, attachments, model selection or database conversation storage.
++3. Render a guest conversation surface inside the native Assistant widget when logged out. History belongs to the browser tab, not an authenticated user. Support streaming, cancellation, clear history and accessible controls.
++4. Build from the deployed upstream commit, run focused checks, and test on a temporary loopback port with a copied database.
++5. Back up active configuration/data, deploy the custom image in the existing Compose project with HOMARR_GUEST_ASSISTANT=true, and verify logged-out chat, private-board denial and unchanged protected management APIs. Preserve rollback image/config.
++
++Guest mode intentionally supports only the currently configured custom provider. Limits are per application process. Admin keys never enter the browser. Do not change Caddy.

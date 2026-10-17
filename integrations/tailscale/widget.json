@@ -1,0 +1,31 @@
+{
+  "$schema": "homarr-custom-widget-v2",
+  "name": "Tailscale",
+  "description": "Online devices by default, offline checkbox and collapsed filter. Unknown stays unknown; collector failure is not device offline. No machine keys, peer keys, routes or user IDs are exported.",
+  "sources": {
+    "default": {
+      "type": "http",
+      "baseUrl": "http://collector.example.net:18082",
+      "networkScope": "private",
+      "auth": "bearer"
+    }
+  },
+  "requests": {
+    "devices": {
+      "path": "/tailscale/devices",
+      "method": "GET",
+      "trigger": "load",
+      "cacheSeconds": 0
+    }
+  },
+  "options": {
+    "listHeight": {
+      "label": "Device list height (px)",
+      "control": "number",
+      "default": 170,
+      "min": 160,
+      "max": 1000
+    }
+  },
+  "template": "<Stack data-gp=\"tailscale\" gap={4} p={6} style={{ width: \"100%\", boxSizing: \"border-box\", background: \"transparent\", color: \"var(--gp-text, #e5edf7)\", borderRadius: \"16px\", fontFamily: \"inherit\", minHeight: 0 }}>\n  <Group justify=\"space-between\"><Stack gap={2}><Title order={3} size=\"h4\" style={{ fontFamily: \"inherit\" }}>Tailscale</Title></Stack><RefreshButton /></Group>\n  {status.devices?.loading ? <Stack><Skeleton height={48} /><Skeleton height={100} /></Stack> : status.devices?.ok === false || status.devices?.error ? <Alert color=\"red\" title=\"Tailscale unavailable\">The collector could not refresh device status. This does not mean your devices are offline. Refresh to retry.</Alert> : <Stack gap=\"xs\">\n    <Group gap=\"xs\"><Badge variant=\"light\" color=\"teal\">{(data.devices?.devices ?? []).filter(d => d.online === true).length} online</Badge><Badge variant=\"light\" color=\"gray\">{(data.devices?.devices ?? []).filter(d => d.online === false).length} offline</Badge>{(data.devices?.devices ?? []).some(d => d.online == null) ? <Badge variant=\"light\" color=\"yellow\">{(data.devices?.devices ?? []).filter(d => d.online == null).length} unknown</Badge> : null}</Group>\n    <Accordion variant=\"default\" keepMounted defaultValue={null}><Accordion.Item value=\"filter\" style={{ border: 0 }}><Accordion.Control p={0} styles={{ label: { padding: \"calc(4px * var(--mantine-scale, 1)) 0\", fontFamily: \"inherit\", fontSize: \"calc(13px * var(--mantine-scale, 1))\" } }}>Filter devices{inputs.search ? \" \u00b7 active\" : \"\"}</Accordion.Control><Accordion.Panel styles={{ content: { padding: \"calc(4px * var(--mantine-scale, 1)) 0\" } }}><TextInput bind=\"search\" defaultValue=\"\" aria-label=\"Filter devices\" placeholder=\"Device name\u2026\" size=\"xs\" /></Accordion.Panel></Accordion.Item></Accordion>\n    <Checkbox bind=\"showOffline\" defaultChecked={false} label=\"Show offline devices\" size=\"xs\" />\n    {(data.devices?.devices ?? []).filter(d => d.name.toLowerCase().includes((inputs.search ?? \"\").trim().toLowerCase()) && (d.online === true || inputs.showOffline === true)).length === 0 ? <Text size=\"sm\" c=\"dimmed\">No matching devices.</Text> : <ScrollArea.Autosize mah={options.listHeight} offsetScrollbars><Box style={{display: \"grid\", gridTemplateColumns: \"repeat(auto-fill, minmax(min(100%, calc(160px * var(--mantine-scale, 1))), 1fr))\", gap: \"calc(8px * var(--mantine-scale, 1))\", alignItems: \"start\"}}>{(data.devices?.devices ?? []).filter(d => d.name.toLowerCase().includes((inputs.search ?? \"\").trim().toLowerCase()) && (d.online === true || inputs.showOffline === true)).sort((a,b) => (a.online === true ? 0 : a.online === false ? 1 : 2) - (b.online === true ? 0 : b.online === false ? 1 : 2) || a.name.localeCompare(b.name)).map(d => <Paper data-gp-entry=\"device\" key={d.id} p={6} radius=\"md\" withBorder><Group justify=\"space-between\" wrap=\"nowrap\" align=\"flex-start\"><Stack gap={2} style={{ minWidth: 0 }}><Text size=\"sm\" fw={600} style={{ overflowWrap: \"anywhere\" }}>{d.name}</Text><Text size=\"xs\" c=\"dimmed\">{d.os}{d.isSelf ? \" \u00b7 collector\" : \"\"}</Text>{d.online !== true ? <Text size=\"xs\" c=\"dimmed\">{d.lastSeen ? \"Last seen \" + Date.toLocaleString(d.lastSeen, \"en-US\") : \"Last seen unavailable\"}</Text> : null}</Stack><Badge size=\"sm\" variant=\"light\" color={d.online === true ? \"teal\" : d.online === false ? \"gray\" : \"yellow\"}>{d.online === true ? \"Online\" : d.online === false ? \"Offline\" : \"Unknown\"}</Badge></Group></Paper>)}</Box></ScrollArea.Autosize>}\n    <Group justify=\"space-between\" gap={4}><Text size=\"xs\" c=\"dimmed\">via collector host</Text>\n    <Text size=\"xs\" c=\"dimmed\">Snapshot {data.devices?.collectedAt ? Date.toLocaleString(data.devices.collectedAt, \"en-US\") : \"unavailable\"}</Text></Group>\n  </Stack>}\n</Stack>"
+}

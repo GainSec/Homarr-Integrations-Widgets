@@ -1,0 +1,21 @@
+{
+  "proxy_token": "<GENERATE_PROXY_TOKEN>",
+  "dns_token": "<INSERT_TECHNITIUM_ZONE_TOKEN>",
+  "password": {
+    "salt": "<GENERATE_WITH_SETUP>",
+    "hash": "<GENERATE_WITH_SETUP>"
+  },
+  "allowed_hosts": [
+    "dashboard.example.net"
+  ],
+  "allowed_origins": [
+    "https://dashboard.example.net"
+  ],
+  "proxy_address": "192.0.2.10",
+  "dns_url": "http://127.0.0.1:5380",
+  "caddy_container": "caddy",
+  "caddyfile": "/srv/caddy/Caddyfile",
+  "state_dir": "/var/lib/homarr-domain-manager",
+  "socket_path": "/run/homarr-domain-manager/app.sock",
+  "socket_gid": 101
+}
